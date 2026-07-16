@@ -1,27 +1,34 @@
 name: C CI with Makefile
-
 on:
   push:
     branches: [ "main" ]
-
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: write
     steps:
     - uses: actions/checkout@v4
-
     - name: Install GCC and Make
       run: sudo apt-get update && sudo apt-get install -y gcc make
-      
     - name: Build library and demo
       working-directory: ./tui
       run: make
-      
     - name: Upload both artifacts
       uses: actions/upload-artifact@v4
       with:
         name: tui-build
         path: |
+          ./tui/libtui.so
+          ./tui/demo
+    - name: Auto Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: nightly-${{ github.run_number }}
+        name: "Nightly Build #${{ github.run_number }}"
+        body: "Automatically compiled output, originating from${{ github.sha }}"
+        draft: false
+        prerelease: true
+        files: |
           ./tui/libtui.so
           ./tui/demo
