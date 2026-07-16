@@ -16,24 +16,18 @@ jobs:
             cc: gcc
             cflags: "-fPIC -Wall -O2"
             make_target: TARGET=libtui.so DEMO=demo
-            artifact_name: tui-linux-amd64
-            lib_ext: so
             extra_pkgs: ""
 
           - platform: linux-arm64
             cc: aarch64-linux-gnu-gcc
             cflags: "-fPIC -Wall -O2"
             make_target: TARGET=libtui.so DEMO=demo
-            artifact_name: tui-linux-arm64
-            lib_ext: so
             extra_pkgs: "gcc-aarch64-linux-gnu"
 
           - platform: android-arm64
             cc: aarch64-linux-android21-clang
             cflags: "-fPIC -Wall -O2"
             make_target: TARGET=libtui.so DEMO=demo
-            artifact_name: tui-android-arm64
-            lib_ext: so
             extra_pkgs: ""
             android: true
 
@@ -41,8 +35,6 @@ jobs:
             cc: armv7a-linux-androideabi21-clang
             cflags: "-fPIC -Wall -O2"
             make_target: TARGET=libtui.so DEMO=demo
-            artifact_name: tui-android-armv7
-            lib_ext: so
             extra_pkgs: ""
             android: true
 
@@ -50,19 +42,10 @@ jobs:
             cc: musl-gcc
             cflags: "-fPIC -Wall -O2 -static"
             make_target: TARGET=libtui.a DEMO=demo-static
-            artifact_name: tui-alpine-x64
-            lib_ext: a
             extra_pkgs: "musl-tools"
             alpine: true
 
-    permissions:
-      contents: write
-
     steps:
-      - name: Generate timestamp
-        id: ts
-        run: echo "time=$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
-
       - uses: actions/checkout@v4
 
       - name: Install base tools
@@ -97,29 +80,76 @@ jobs:
         run: |
           make CC="${{ matrix.cc }}" CFLAGS="${{ matrix.cflags }}" ${{ matrix.make_target }}
 
-      - name: Upload artifacts
+      - name: Package into ZIP (per architecture)
+        working-directory: ./tui
+        run: |
+          # 确定生成的文件名（demo 可能带后缀）
+          DEMO_FILE=$(ls demo* 2>/dev/null || echo "")
+          LIB_FILE=$(ls libtui.* 2>/dev/null || echo "")
+          if [ -n "$DEMO_FILE" ] && [ -n "$LIB_FILE" ]; then
+            zip MoZTUI-${{ matrix.platform }}.zip "$LIB_FILE" "$DEMO_FILE"
+          else
+            echo "Error: missing build outputs"
+            exit 1
+          fi
+
+      - name: Upload ZIP as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
-          path: |
-            ./tui/libtui.${{ matrix.lib_ext }}
-            ./tui/demo*
+          name: MoZTUI-${{ matrix.platform }}
+          path: ./tui/MoZTUI-${{ matrix.platform }}.zip
 
-      - name: Auto Release (Nightly)
-        if: matrix.platform == 'linux-amd64'
-        uses: softprops/action-gh-release@v1
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: write
+    if: github.ref == 'refs/heads/main'   # 仅在 main 分支触发
+    steps:
+      - name: Generate timestamp
+        id: ts
+        run: echo "time=$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
+
+      - name: Download all ZIP artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: List downloaded files
+        run: ls -la ./artifacts
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: nightly-${{ steps.ts.outputs.time }}
-          name: "Nightly Build ${{ steps.ts.outputs.time }}"
+          release_name: "Nightly Build ${{ steps.ts.outputs.time }}"
           body: |
-            Verified platforms:
-            - Linux: x86_64, ARM64
-            - Android: ARM64, ARMv7
-            - Alpine: x86_64 (static)
+            All architectures:
+            - Linux x86_64
+            - Linux ARM64
+            - Android ARM64
+            - Android ARMv7
+            - Alpine x86_64 (static)
             Commit: ${{ github.sha }}
-            Event: ${{ github.event_name }}
           draft: false
           prerelease: true
-          files: |
-            ./tui/libtui.so
-            ./tui/demo
+
+      - name: Upload all ZIPs to Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for zipfile in ./artifacts/MoZTUI-*/MoZTUI-*.zip; do
+            if [ -f "$zipfile" ]; then
+              echo "Uploading $zipfile ..."
+              ASSET_NAME=$(basename "$zipfile")
+              curl -L \
+                -X POST \
+                -H "Authorization: token $GITHUB_TOKEN" \
+                -H "Content-Type: application/zip" \
+                --data-binary @"$zipfile" \
+                "${{ steps.create_release.outputs.upload_url }}?name=$ASSET_NAME"
+            fi
+          done
