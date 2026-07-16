@@ -1,0 +1,31 @@
+name: C CI with Makefile
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install GCC and Make
+      run: sudo apt-get update && sudo apt-get install -y gcc make
+      
+    - name: Build library and demo
+      working-directory: ./tui
+      run: make
+    # （可选）运行测试程序，验证终端适配性
+    - name: Run demo test
+      working-directory: ./tui
+      run: ./demo
+      
+    - name: Upload both artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: tui-build
+        path: |
+          ./tui/libtui.so
+          ./tui/demo
