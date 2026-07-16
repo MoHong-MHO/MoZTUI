@@ -1,4 +1,4 @@
-name: Linux Full Matrix CI
+name: Linux Stable CI
 
 on:
   push:
@@ -30,23 +30,6 @@ jobs:
             extra_pkgs: "gcc-aarch64-linux-gnu"
 
           # ========== B 分区 ==========
-          - platform: linux-x86
-            cc: gcc
-            cflags: "-fPIC -Wall -O2 -m32"
-            make_target: TARGET=libtui.so DEMO=demo
-            artifact_name: tui-linux-x86
-            lib_ext: so
-            extra_pkgs: "gcc-multilib g++-multilib libc6-dev-i386"
-            setup_multilib: true
-
-          - platform: linux-arm32
-            cc: arm-linux-gnueabihf-gcc
-            cflags: "-fPIC -Wall -O2 -march=armv7-a -mfloat-abi=hard"
-            make_target: TARGET=libtui.so DEMO=demo
-            artifact_name: tui-linux-arm32
-            lib_ext: so
-            extra_pkgs: "gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf"
-
           - platform: android-arm64
             cc: aarch64-linux-android21-clang
             cflags: "-fPIC -Wall -O2"
@@ -83,12 +66,6 @@ jobs:
 
       - name: Install base tools
         run: sudo apt-get update && sudo apt-get install -y build-essential make
-
-      - name: Setup 32-bit support
-        if: matrix.setup_multilib == true
-        run: |
-          sudo dpkg --add-architecture i386
-          sudo apt-get update
 
       - name: Install extra packages
         if: matrix.extra_pkgs != ''
@@ -134,10 +111,10 @@ jobs:
           tag_name: nightly-${{ github.run_number }}
           name: "Nightly Build #${{ github.run_number }}"
           body: |
-            Linux + Android full matrix:
-            - glibc: x86_64, ARM64, x86, ARM32
+            Verified platforms:
+            - Linux: x86_64, ARM64
             - Android: ARM64, ARMv7
-            - musl: Alpine x86_64 (static)
+            - Alpine: x86_64 (static)
             Commit: ${{ github.sha }}
           draft: false
           prerelease: true
