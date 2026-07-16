@@ -12,7 +12,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # ========== A 分区 ==========
           - platform: linux-amd64
             cc: gcc
             cflags: "-fPIC -Wall -O2"
@@ -29,7 +28,6 @@ jobs:
             lib_ext: so
             extra_pkgs: "gcc-aarch64-linux-gnu"
 
-          # ========== B 分区 ==========
           - platform: android-arm64
             cc: aarch64-linux-android21-clang
             cflags: "-fPIC -Wall -O2"
@@ -48,7 +46,6 @@ jobs:
             extra_pkgs: ""
             android: true
 
-          # ========== C 分区 ==========
           - platform: alpine-x64
             cc: musl-gcc
             cflags: "-fPIC -Wall -O2 -static"
@@ -62,6 +59,10 @@ jobs:
       contents: write
 
     steps:
+      - name: Generate timestamp
+        id: ts
+        run: echo "time=$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
+
       - uses: actions/checkout@v4
 
       - name: Install base tools
@@ -108,14 +109,15 @@ jobs:
         if: matrix.platform == 'linux-amd64'
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: nightly-${{ github.run_number }}
-          name: "Nightly Build #${{ github.run_number }}"
+          tag_name: nightly-${{ steps.ts.outputs.time }}
+          name: "Nightly Build ${{ steps.ts.outputs.time }}"
           body: |
             Verified platforms:
             - Linux: x86_64, ARM64
             - Android: ARM64, ARMv7
             - Alpine: x86_64 (static)
             Commit: ${{ github.sha }}
+            Event: ${{ github.event_name }}
           draft: false
           prerelease: true
           files: |
