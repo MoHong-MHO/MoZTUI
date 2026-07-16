@@ -1,4 +1,4 @@
-name: Full Matrix CI (Linux + Android + Alpine + macOS)
+name: Linux Full Matrix CI
 
 on:
   push:
@@ -7,101 +7,70 @@ on:
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          # ==================== A 分区 ====================
-          - zone: A
-            platform: linux-amd64
-            os: ubuntu-latest
+          # ========== A 分区 ==========
+          - platform: linux-amd64
             cc: gcc
             cflags: "-fPIC -Wall -O2"
             make_target: TARGET=libtui.so DEMO=demo
             artifact_name: tui-linux-amd64
-            bin_ext: ""
             lib_ext: so
             extra_pkgs: ""
 
-          - zone: A
-            platform: linux-arm64
-            os: ubuntu-latest
+          - platform: linux-arm64
             cc: aarch64-linux-gnu-gcc
             cflags: "-fPIC -Wall -O2"
             make_target: TARGET=libtui.so DEMO=demo
             artifact_name: tui-linux-arm64
-            bin_ext: ""
             lib_ext: so
             extra_pkgs: "gcc-aarch64-linux-gnu"
 
-          - zone: A
-            platform: macos-arm64
-            os: macos-latest
-            cc: gcc
-            cflags: "-fPIC -Wall -O2"
-            make_target: TARGET=libtui.dylib DEMO=demo
-            artifact_name: tui-macos-arm64
-            bin_ext: ""
-            lib_ext: dylib
-            extra_pkgs: ""
-
-          # ==================== B 分区 ====================
-          - zone: B
-            platform: linux-x86
-            os: ubuntu-latest
+          # ========== B 分区 ==========
+          - platform: linux-x86
             cc: gcc
             cflags: "-fPIC -Wall -O2 -m32"
             make_target: TARGET=libtui.so DEMO=demo
             artifact_name: tui-linux-x86
-            bin_ext: ""
             lib_ext: so
             extra_pkgs: "gcc-multilib g++-multilib libc6-dev-i386"
+            setup_multilib: true
 
-          - zone: B
-            platform: linux-arm32
-            os: ubuntu-latest
+          - platform: linux-arm32
             cc: arm-linux-gnueabihf-gcc
             cflags: "-fPIC -Wall -O2 -march=armv7-a -mfloat-abi=hard"
             make_target: TARGET=libtui.so DEMO=demo
             artifact_name: tui-linux-arm32
-            bin_ext: ""
             lib_ext: so
             extra_pkgs: "gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf"
 
-          - zone: B
-            platform: android-arm64
-            os: ubuntu-latest
+          - platform: android-arm64
             cc: aarch64-linux-android21-clang
             cflags: "-fPIC -Wall -O2"
             make_target: TARGET=libtui.so DEMO=demo
             artifact_name: tui-android-arm64
-            bin_ext: ""
             lib_ext: so
             extra_pkgs: ""
             android: true
 
-          - zone: B
-            platform: android-armv7
-            os: ubuntu-latest
+          - platform: android-armv7
             cc: armv7a-linux-androideabi21-clang
             cflags: "-fPIC -Wall -O2"
             make_target: TARGET=libtui.so DEMO=demo
             artifact_name: tui-android-armv7
-            bin_ext: ""
             lib_ext: so
             extra_pkgs: ""
             android: true
 
-          # ==================== C 分区 ====================
-          - zone: C
-            platform: alpine-x64
-            os: ubuntu-latest
+          # ========== C 分区 ==========
+          - platform: alpine-x64
             cc: musl-gcc
             cflags: "-fPIC -Wall -O2 -static"
             make_target: TARGET=libtui.a DEMO=demo-static
             artifact_name: tui-alpine-x64
-            bin_ext: ""
             lib_ext: a
             extra_pkgs: "musl-tools"
             alpine: true
@@ -114,6 +83,12 @@ jobs:
 
       - name: Install base tools
         run: sudo apt-get update && sudo apt-get install -y build-essential make
+
+      - name: Setup 32-bit support
+        if: matrix.setup_multilib == true
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
 
       - name: Install extra packages
         if: matrix.extra_pkgs != ''
@@ -150,7 +125,7 @@ jobs:
           name: ${{ matrix.artifact_name }}
           path: |
             ./tui/libtui.${{ matrix.lib_ext }}
-            ./tui/demo${{ matrix.bin_ext }}
+            ./tui/demo*
 
       - name: Auto Release (Nightly)
         if: matrix.platform == 'linux-amd64'
@@ -159,10 +134,10 @@ jobs:
           tag_name: nightly-${{ github.run_number }}
           name: "Nightly Build #${{ github.run_number }}"
           body: |
-            Build artifacts:
-            - A: Linux x86_64/ARM64, macOS ARM64
-            - B: Linux x86/ARM32, Android
-            - C: Alpine (static)
+            Linux + Android full matrix:
+            - glibc: x86_64, ARM64, x86, ARM32
+            - Android: ARM64, ARMv7
+            - musl: Alpine x86_64 (static)
             Commit: ${{ github.sha }}
           draft: false
           prerelease: true
