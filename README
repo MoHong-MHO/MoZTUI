@@ -1,0 +1,206 @@
+libtui - 轻量级终端用户界面库
+
+简介
+
+libtui 是一个轻量级的终端用户界面库，提供丰富的交互组件，无需任何外部依赖。支持 20 种语言，代码小巧（编译后约 100KB），适合嵌入式系统和资源受限环境。
+
+特性
+
+· 轻量级：编译后仅约 100KB
+· 跨平台：支持 Linux、Termux、macOS 等类 Unix 系统
+· 多语言：内置 20 种语言支持，可动态扩展
+· 无依赖：纯 C 实现，无需 ncurses 等外部库
+· 功能丰富：菜单、对话框、表单、表格等完整 TUI 组件
+
+快速开始
+
+编译安装
+
+```bash
+cd tui
+make
+sudo make install
+```
+
+基础示例
+
+```c
+#include "tui.h"
+
+int main() {
+    tui_init();
+    
+    const char *menu[] = {"Alert", "Confirm", "Exit"};
+    int choice = tui_menu("Demo", menu, 3);
+    
+    if (choice == 0) tui_alert("Hello TUI!");
+    if (choice == 1) {
+        if (tui_confirm("Sure?")) tui_alert("Yes");
+        else tui_alert("No");
+    }
+    
+    tui_cleanup();
+    return 0;
+}
+```
+
+API 参考
+
+核心函数
+
+函数 说明
+tui_init() 初始化 TUI 环境
+tui_cleanup() 清理恢复终端
+tui_clear() 清屏
+tui_get_key() 获取按键（支持方向键）
+tui_set_title() 设置终端标题
+
+对话框
+
+函数 说明
+tui_alert(msg) 显示提示框
+tui_confirm(msg) 确认对话框，返回 1/0
+tui_input(prompt, buf, size) 输入框
+tui_password(prompt, buf, size) 密码输入
+tui_message(title, msg) 多行消息
+tui_notify(msg, ms) 短暂通知
+tui_progress(title, percent) 进度条
+
+菜单选择
+
+函数 说明
+tui_menu(title, items, count) 返回选中索引
+tui_list(title, items, count, *selected) 带滚动的列表
+tui_checkbox(title, items, count, *checked) 复选框
+tui_form(title, labels, values, sizes, fc) 多字段表单
+
+绘图函数
+
+函数 说明
+tui_gotoxy(x, y) 移动光标
+tui_hline(y, x1, x2, c) 绘制水平线
+tui_vline(x, y1, y2, c) 绘制垂直线
+tui_rect(x, y, w, h, fill, edge) 绘制矩形
+tui_table(headers, hc, rows, rc, cc) 绘制表格
+tui_card(title, content, w, h) 绘制卡片
+tui_tag(label, type) 标签（success/error/warning）
+tui_badge(text, type) 徽章
+
+语言支持
+
+语言代码 语言
+0 简体中文
+1 繁體中文
+2 粵語
+3 閩南語
+4 客語
+5 吳語
+6 English(US)
+7 English(UK)
+8 日本語
+9 ひらがな
+10 Español
+11 Français
+12 Deutsch
+13 Русский
+14 العربية
+15 हिन्दी
+16 বাংলা
+17 Português
+18 اردو
+19 Bahasa Indonesia
+20 Türkçe
+
+```c
+tui_set_language(TUI_LANG_ZH_CN);  // 切换语言
+```
+
+按键常量
+
+常量 值 说明
+TUI_KEY_UP 1000 上箭头
+TUI_KEY_DOWN 1001 下箭头
+TUI_KEY_LEFT 1002 左箭头
+TUI_KEY_RIGHT 1003 右箭头
+TUI_KEY_ENTER 10 回车键
+TUI_KEY_ESC 27 ESC 键
+TUI_KEY_SPACE 32 空格键
+TUI_KEY_BACKSPACE 127 退格键
+
+完整示例
+
+```c
+#include "tui.h"
+#include "tui_lang.h"
+
+int main() {
+    char name[64], age[8];
+    int choice;
+    
+    tui_init();
+    tui_set_title("My App");
+    
+    const char *main_menu[] = {"登录", "设置", "关于", "退出"};
+    
+    do {
+        choice = tui_menu("主菜单", main_menu, 4);
+        
+        if (choice == 0) {
+            const char *labels[] = {"姓名", "年龄"};
+            char *values[] = {name, age};
+            int sizes[] = {64, 8};
+            
+            if (tui_form("登录", labels, values, sizes, 2) == 0) {
+                char msg[128];
+                snprintf(msg, sizeof(msg), "欢迎 %s (%s岁)", name, age);
+                tui_alert(msg);
+            }
+        }
+        else if (choice == 1) {
+            tui_set_language(TUI_LANG_EN_US);
+            tui_alert("Language changed");
+        }
+        else if (choice == 2) {
+            tui_message("关于", "libtui v1.0\n轻量级终端UI库");
+        }
+        
+    } while (choice != 3);
+    
+    tui_cleanup();
+    return 0;
+}
+```
+
+添加新语言
+
+在 lang/ 目录创建 lang_xxx.c：
+
+```c
+#include "../tui_lang.h"
+
+__attribute__((constructor)) static void reg(void) {
+    tui_lang_register(代码, "语言名",
+        "按任意键继续",
+        "上下移动，回车选择，ESC退出",
+        "(y/n): ",
+        "是", "否", "确定", "取消");
+}
+```
+
+编译选项
+
+```bash
+make          # 编译库和演示程序
+make clean    # 清理
+make install  # 安装到系统
+```
+
+许可证
+
+MIT License
+
+统计
+
+· 内核大小: ~32 KB
+· 编译后总占用: ~130 KB
+· 支持架构: x86_64, aarch64, arm, riscv64
