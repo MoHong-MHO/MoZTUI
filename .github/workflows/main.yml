@@ -1,34 +1,240 @@
-name: C CI with Makefile
+name: Full Matrix CI (A + B + C Zones)
+
 on:
   push:
     branches: [ "main" ]
+  workflow_dispatch:
+
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ==================== A 分区 ====================
+          # Linux x86_64 (glibc)
+          - zone: A
+            platform: linux-amd64
+            os: ubuntu-latest
+            cc: gcc
+            cflags: "-fPIC -Wall -O2"
+            make_target: TARGET=libtui.so DEMO=demo
+            artifact_name: tui-linux-amd64
+            bin_ext: ""
+            lib_ext: so
+            extra_pkgs: ""
+
+          # Linux ARM64 (glibc)
+          - zone: A
+            platform: linux-arm64
+            os: ubuntu-latest
+            cc: aarch64-linux-gnu-gcc
+            cflags: "-fPIC -Wall -O2"
+            make_target: TARGET=libtui.so DEMO=demo
+            artifact_name: tui-linux-arm64
+            bin_ext: ""
+            lib_ext: so
+            extra_pkgs: "gcc-aarch64-linux-gnu"
+
+          # macOS Intel
+          - zone: A
+            platform: macos-x64
+            os: macos-13
+            cc: gcc
+            cflags: "-fPIC -Wall -O2"
+            make_target: TARGET=libtui.dylib DEMO=demo
+            artifact_name: tui-macos-x64
+            bin_ext: ""
+            lib_ext: dylib
+            extra_pkgs: ""
+
+          # macOS Apple Silicon
+          - zone: A
+            platform: macos-arm64
+            os: macos-latest
+            cc: gcc
+            cflags: "-fPIC -Wall -O2"
+            make_target: TARGET=libtui.dylib DEMO=demo
+            artifact_name: tui-macos-arm64
+            bin_ext: ""
+            lib_ext: dylib
+            extra_pkgs: ""
+
+          # ==================== B 分区 ====================
+          # Linux x86 (32-bit, glibc)
+          - zone: B
+            platform: linux-x86
+            os: ubuntu-latest
+            cc: gcc
+            cflags: "-fPIC -Wall -O2 -m32"
+            make_target: TARGET=libtui.so DEMO=demo
+            artifact_name: tui-linux-x86
+            bin_ext: ""
+            lib_ext: so
+            extra_pkgs: "gcc-multilib"
+
+          # Linux ARM32 (hard-float)
+          - zone: B
+            platform: linux-arm32
+            os: ubuntu-latest
+            cc: arm-linux-gnueabihf-gcc
+            cflags: "-fPIC -Wall -O2 -march=armv7-a -mfloat-abi=hard"
+            make_target: TARGET=libtui.so DEMO=demo
+            artifact_name: tui-linux-arm32
+            bin_ext: ""
+            lib_ext: so
+            extra_pkgs: "gcc-arm-linux-gnueabihf"
+
+          # Android ARM64
+          - zone: B
+            platform: android-arm64
+            os: ubuntu-latest
+            cc: aarch64-linux-android21-clang
+            cflags: "-fPIC -Wall -O2"
+            make_target: TARGET=libtui.so DEMO=demo
+            artifact_name: tui-android-arm64
+            bin_ext: ""
+            lib_ext: so
+            extra_pkgs: ""
+            android: true
+
+          # Android ARMv7
+          - zone: B
+            platform: android-armv7
+            os: ubuntu-latest
+            cc: armv7a-linux-androideabi21-clang
+            cflags: "-fPIC -Wall -O2"
+            make_target: TARGET=libtui.so DEMO=demo
+            artifact_name: tui-android-armv7
+            bin_ext: ""
+            lib_ext: so
+            extra_pkgs: ""
+            android: true
+
+          # ==================== C 分区 ====================
+          # Alpine Linux (musl, static)
+          - zone: C
+            platform: alpine-x64
+            os: ubuntu-latest
+            cc: musl-gcc
+            cflags: "-fPIC -Wall -O2 -static"
+            make_target: TARGET=libtui.a DEMO=demo-static
+            artifact_name: tui-alpine-x64
+            bin_ext: ""
+            lib_ext: a
+            extra_pkgs: "musl-tools"
+            alpine: true
+
+          # FreeBSD 13
+          - zone: C
+            platform: freebsd-x64
+            os: ubuntu-22.04
+            cc: x86_64-pc-freebsd13-gcc
+            cflags: "-fPIC -Wall -O2"
+            make_target: TARGET=libtui.so DEMO=demo
+            artifact_name: tui-freebsd-x64
+            bin_ext: ""
+            lib_ext: so
+            extra_pkgs: "gcc-x86_64-pc-freebsd13"
+            freebsd: true
+
+          # OpenBSD 7
+          - zone: C
+            platform: openbsd-x64
+            os: ubuntu-22.04
+            cc: x86_64-unknown-openbsd7-gcc
+            cflags: "-fPIC -Wall -O2"
+            make_target: TARGET=libtui.so DEMO=demo
+            artifact_name: tui-openbsd-x64
+            bin_ext: ""
+            lib_ext: so
+            extra_pkgs: "gcc-x86_64-unknown-openbsd7"
+            openbsd: true
+
     permissions:
       contents: write
+
     steps:
-    - uses: actions/checkout@v4
-    - name: Install GCC and Make
-      run: sudo apt-get update && sudo apt-get install -y gcc make
-    - name: Build library and demo
-      working-directory: ./tui
-      run: make
-    - name: Upload both artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: tui-build
-        path: |
-          ./tui/libtui.so
-          ./tui/demo
-    - name: Auto Release
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: nightly-${{ github.run_number }}
-        name: "Nightly Build #${{ github.run_number }}"
-        body: "Automatically compiled output, originating from${{ github.sha }}"
-        draft: false
-        prerelease: true
-        files: |
-          ./tui/libtui.so
-          ./tui/demo
+      # Step 1: Checkout source
+      - uses: actions/checkout@v4
+
+      # Step 2: Install base tools (Linux)
+      - name: Install base tools (Ubuntu)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential make
+
+      # Step 3: Install extra packages (B/C zones)
+      - name: Install extra packages
+        if: matrix.extra_pkgs != ''
+        run: sudo apt-get install -y ${{ matrix.extra_pkgs }}
+
+      # Step 4: Setup Android NDK (B zone: android)
+      - name: Setup Android SDK
+        if: matrix.android == true
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK 25
+        if: matrix.android == true
+        run: |
+          sdkmanager "ndk;25.2.9519653"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> $GITHUB_ENV
+
+      - name: Add NDK toolchain to PATH
+        if: matrix.android == true
+        run: echo "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+
+      # Step 5: Setup Alpine (C zone: alpine)
+      - name: Setup Alpine toolchain
+        if: matrix.alpine == true
+        run: |
+          sudo apt-get install -y musl-tools
+          sudo ln -sf /usr/bin/musl-gcc /usr/local/bin/gcc
+
+      # Step 6: Setup FreeBSD (C zone: freebsd)
+      - name: Setup FreeBSD toolchain
+        if: matrix.freebsd == true
+        run: |
+          sudo apt-get install -y gcc-x86_64-pc-freebsd13
+          sudo ln -sf /usr/bin/x86_64-pc-freebsd13-gcc /usr/local/bin/gcc
+
+      # Step 7: Setup OpenBSD (C zone: openbsd)
+      - name: Setup OpenBSD toolchain
+        if: matrix.openbsd == true
+        run: |
+          sudo apt-get install -y gcc-x86_64-unknown-openbsd7
+          sudo ln -sf /usr/bin/x86_64-unknown-openbsd7-gcc /usr/local/bin/gcc
+
+      # Step 8: Build
+      - name: Build
+        working-directory: ./tui
+        run: |
+          make CC="${{ matrix.cc }}" CFLAGS="${{ matrix.cflags }}" ${{ matrix.make_target }}
+
+      # Step 9: Upload artifacts
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            ./tui/libtui.${{ matrix.lib_ext }}
+            ./tui/demo${{ matrix.bin_ext }}
+
+      # Step 10: Auto Release (only for A zone: linux-amd64)
+      - name: Auto Release (Nightly)
+        if: matrix.platform == 'linux-amd64'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: nightly-${{ github.run_number }}
+          name: "Nightly Build #${{ github.run_number }}"
+          body: |
+            Full matrix build (A + B + C zones)
+            - A zone: Linux/macOS (x86_64/ARM64)
+            - B zone: Linux x86, ARM32, Android
+            - C zone: Alpine, FreeBSD, OpenBSD
+            Base commit: ${{ github.sha }}
+          draft: false
+          prerelease: true
+          files: |
+            ./tui/libtui.so
+            ./tui/demo
