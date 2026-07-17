@@ -104,8 +104,10 @@ jobs:
     needs: build
     permissions:
       contents: write
-    if: github.ref == 'refs/heads/main'   # 仅在 main 分支触发
+    if: github.ref == 'refs/heads/main'
     steps:
+      - uses: actions/checkout@v4
+
       - name: Generate timestamp
         id: ts
         run: echo "time=$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
@@ -116,40 +118,26 @@ jobs:
           path: ./artifacts
 
       - name: List downloaded files
-        run: ls -la ./artifacts
+        run: find ./artifacts -type f -name "*.zip" | sort
 
       - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
           tag_name: nightly-${{ steps.ts.outputs.time }}
-          release_name: "Nightly Build ${{ steps.ts.outputs.time }}"
+          name: "Nightly Build ${{ steps.ts.outputs.time }}"
+          files: ./artifacts/MoZTUI-*/*.zip
+          draft: false
+          prerelease: true
           body: |
+            ## MoZTUI Nightly Build
+
             All architectures:
             - Linux x86_64
             - Linux ARM64
             - Android ARM64
             - Android ARMv7
             - Alpine x86_64 (static)
-            Commit: ${{ github.sha }}
-          draft: false
-          prerelease: true
 
-      - name: Upload all ZIPs to Release
+            Commit: ${{ github.sha }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          for zipfile in ./artifacts/MoZTUI-*/MoZTUI-*.zip; do
-            if [ -f "$zipfile" ]; then
-              echo "Uploading $zipfile ..."
-              ASSET_NAME=$(basename "$zipfile")
-              curl -L \
-                -X POST \
-                -H "Authorization: token $GITHUB_TOKEN" \
-                -H "Content-Type: application/zip" \
-                --data-binary @"$zipfile" \
-                "${{ steps.create_release.outputs.upload_url }}?name=$ASSET_NAME"
-            fi
-          done
